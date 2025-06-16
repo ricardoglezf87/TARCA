@@ -1,0 +1,1 @@
+pip install pynput mss Pillow pyautogui watchdog google-generativeai python-dotenv
