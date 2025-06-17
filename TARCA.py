@@ -4,8 +4,8 @@ import time
 import threading
 from datetime import datetime
 
-# Para escuchar el teclado (F2)
-from pynput import keyboard
+# Para escuchar el teclado (F2) y el ratón
+from pynput import keyboard, mouse
 
 # Para captura de pantalla eficiente
 import mss
@@ -31,14 +31,14 @@ from PIL import Image
 CAPTURE_FOLDER = "capturas"  # Carpeta para guardar las imágenes
 # La API Key se cargará desde el archivo .env o variables de entorno
 GEMINI_API_KEY = None
-PROMPT_PARA_GEMINI = "Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones."
+PROMPT_PARA_GEMINI = "Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones. En caso de tener marcada alguna opcion confirmar si es correcta."
 MODELO_GEMINI = 'gemini-1.5-flash-latest' # Modelo multimodal recomendado
 
 # --- Lógica de Captura de Pantalla ---
 
-# Bandera global y cooldown para evitar capturas múltiples si F2 se mantiene presionado
-f2_presionado_recientemente = False
-COOLDOWN_F2_SEGUNDOS = 2  # Tiempo de espera en segundos entre capturas
+# Bandera global y cooldown para evitar capturas múltiples
+captura_en_cooldown = False
+COOLDOWN_CAPTURA_SEGUNDOS = 2  # Tiempo de espera en segundos entre capturas
 
 def obtener_monitor_con_cursor():
     """Determina en qué monitor se encuentra el cursor."""
@@ -82,12 +82,12 @@ def obtener_monitor_con_cursor():
 
 def realizar_captura_pantalla():
     """Captura el monitor donde está el cursor y guarda la imagen."""
-    global f2_presionado_recientemente
+    global captura_en_cooldown
     
     monitor_a_capturar = obtener_monitor_con_cursor()
     if not monitor_a_capturar:
         print("No se pudo capturar la pantalla: monitor no encontrado.")
-        f2_presionado_recientemente = False # Resetear flag si falla la detección del monitor
+        captura_en_cooldown = False # Resetear flag si falla la detección del monitor
         return
 
     try:
@@ -110,24 +110,23 @@ def realizar_captura_pantalla():
         print(f"Error al capturar la pantalla: {e}")
     finally:
         # Iniciar un temporizador para resetear la bandera después del cooldown
-        threading.Timer(COOLDOWN_F2_SEGUNDOS, resetear_bandera_f2).start()
+        threading.Timer(COOLDOWN_CAPTURA_SEGUNDOS, resetear_cooldown_captura).start()
 
-def resetear_bandera_f2():
-    """Resetea la bandera f2_presionado_recientemente después del cooldown."""
-    global f2_presionado_recientemente
-    f2_presionado_recientemente = False
-    # print(f"Cooldown de F2 terminado. Listo para nueva captura.") # Opcional: para depuración
+def resetear_cooldown_captura():
+    """Resetea la bandera captura_en_cooldown después del cooldown."""
+    global captura_en_cooldown
+    captura_en_cooldown = False
+    # print(f"Cooldown de captura terminado. Listo para nueva captura.") # Opcional: para depuración
 
 def al_presionar_tecla(tecla):
     """Callback que se ejecuta cuando se presiona una tecla."""
-    global f2_presionado_recientemente
+    global captura_en_cooldown
     try:
-        if tecla == keyboard.Key.f2 and not f2_presionado_recientemente:
-            f2_presionado_recientemente = True # Marcar como presionado para iniciar cooldown
+        if tecla == keyboard.Key.f2 and not captura_en_cooldown:
+            captura_en_cooldown = True # Marcar como en cooldown
             print("F2 presionado! Realizando captura...")
             # Realizar la captura en un nuevo hilo para no bloquear el listener
             threading.Thread(target=realizar_captura_pantalla).start()
-            
     except AttributeError:
         # Ignorar otras teclas que no son especiales (como 'a', 'b', 'c')
         pass
@@ -135,15 +134,33 @@ def al_presionar_tecla(tecla):
         print(f"Error en el callback de tecla: {e}")
 
 
+def al_hacer_clic_raton(x, y, button, pressed):
+    """Callback que se ejecuta cuando se hace clic con el ratón."""
+    global captura_en_cooldown
+    try:
+        # button.x2 suele ser el botón "Adelante" o "Avanzar página"
+        if pressed and button == mouse.Button.x2 and not captura_en_cooldown:
+            captura_en_cooldown = True # Marcar como en cooldown
+            print("Botón 'Avanzar Página' del ratón presionado! Realizando captura...")
+            # Realizar la captura en un nuevo hilo para no bloquear el listener
+            threading.Thread(target=realizar_captura_pantalla).start()
+    except Exception as e:
+        print(f"Error en el callback de clic del ratón: {e}")
+
+
 def iniciar_escucha_teclado():
     """Inicia el listener para la tecla F2."""
     print("Escuchando la tecla F2... Presiona F2 para capturar la pantalla donde está el cursor.")
-    print(f"Las capturas se guardarán en la carpeta '{CAPTURE_FOLDER}'.")
     # El listener se ejecuta en su propio hilo, por lo que listener.join() bloqueará
     # el hilo actual (que es el hilo de escucha_teclado).
     with keyboard.Listener(on_press=al_presionar_tecla) as listener:
         listener.join()
 
+def iniciar_escucha_raton():
+    """Inicia el listener para el botón 'Avanzar Página' del ratón."""
+    print("Escuchando el botón 'Avanzar Página' del ratón...")
+    with mouse.Listener(on_click=al_hacer_clic_raton) as listener:
+        listener.join()
 # --- Lógica de Procesamiento con Gemini ---
 
 class ManejadorCapturas(FileSystemEventHandler):
@@ -269,6 +286,11 @@ def main():
     hilo_escucha_teclado = threading.Thread(target=iniciar_escucha_teclado, daemon=True)
     hilo_escucha_teclado.start()
 
+    # Iniciar el listener de ratón en un hilo separado
+    hilo_escucha_raton = threading.Thread(target=iniciar_escucha_raton, daemon=True)
+    hilo_escucha_raton.start()
+
+    print(f"Las capturas se guardarán en la carpeta '{CAPTURE_FOLDER}'.")
     # Iniciar el monitor de la carpeta de capturas
     manejador_eventos = ManejadorCapturas(modelo_gemini=modelo_gemini)
     observador = Observer()
