@@ -31,8 +31,19 @@ from PIL import Image
 CAPTURE_FOLDER = "capturas"  # Carpeta para guardar las imágenes
 # La API Key se cargará desde el archivo .env o variables de entorno
 GEMINI_API_KEY = None
-PROMPT_PARA_GEMINI = "Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones. En caso de tener marcada alguna opcion confirmar si es correcta."
-MODELO_GEMINI = 'gemini-1.5-flash-latest' # Modelo multimodal recomendado
+#PROMPT_PARA_GEMINI = """Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones. """
+PROMPT_PARA_GEMINI = """Estoy realizando el examen de certificación PSM I (Professional Scrum Master I). Para la pregunta en la imagen adjunta (que está en inglés), por favor:
+1. Traduce la pregunta completa y sus opciones al español. Es crucial que al traducir NO traduzcas los siguientes términos específicos de Scrum y Agile (mantenlos en inglés): Product Owner, Scrum Master, Developers, Scrum Team, Sprint, Sprint Planning, Daily Scrum, Sprint Review, Sprint Retrospective, Product Backlog, Sprint Backlog, Increment, Definition of Done, Product Goal, Sprint Goal, stakeholders, Agile, Scrum Guide.
+2. A continuación, y basándote estrictamente en la Guía Scrum oficial, proporciona la(s) letra(s) de la(s) opción(es) correcta(s) a la pregunta original.
+
+El formato de salida debe ser exactamente el siguiente:
+Pregunta Traducida:
+[Aquí la pregunta traducida con sus opciones, manteniendo los términos clave en inglés]
+
+Respuesta: [Aquí la(s) letra(s) de la(s) opción(es) correcta(s) de la pregunta original, por ejemplo: A o A, C]
+
+No incluyas ninguna otra explicación, encabezados adicionales o comentarios fuera de este formato."""
+MODELO_GEMINI = 'gemini-2.5-flash' # Modelo multimodal recomendado
 
 # --- Lógica de Captura de Pantalla ---
 
