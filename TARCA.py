@@ -43,7 +43,7 @@ Pregunta Traducida:
 Respuesta: [Aquí la(s) letra(s) de la(s) opción(es) correcta(s) de la pregunta original, por ejemplo: A o A, C]
 
 No incluyas ninguna otra explicación, encabezados adicionales o comentarios fuera de este formato."""
-MODELO_GEMINI = 'gemini-1.5-flash-latest' # Modelo multimodal recomendado
+MODELO_GEMINI = 'gemini-2.5-flash' # Modelo multimodal recomendado
 
 # --- Lógica de Captura de Pantalla ---
 
