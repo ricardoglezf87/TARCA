@@ -230,32 +230,7 @@ class ManejadorCapturas(FileSystemEventHandler):
                 return
 
             print("\n--- Respuesta de Gemini ---")
-            # Lógica para convertir la respuesta numérica de Gemini a letras (A, B, C...)
-            texto_respuesta = respuesta.text.strip()
-            letras_finales = ""
-            
-            if texto_respuesta:
-                try:
-                    # Mapeo de número (como string) a letra. '1'->'A', '2'->'B', etc.
-                    mapa_letras = {str(i+1): chr(ord('A') + i) for i in range(26)}
-                    
-                    # Separar por si hay múltiples respuestas (ej. "1,3") y quitar espacios
-                    indices = texto_respuesta.replace(" ", "").split(',')
-                    
-                    # Convertir cada índice numérico a su letra correspondiente
-                    letras = [mapa_letras.get(i) for i in indices if i in mapa_letras]
-                    letras_finales = "".join(letras)
-
-                    if letras_finales:
-                        print(letras_finales) # Salida deseada: A, B, AC, etc.
-                    else:
-                        # Si Gemini devuelve algo que no son números (ej. texto de explicación)
-                        print(f"Respuesta no reconocida de Gemini: '{texto_respuesta}'")
-                except Exception as e:
-                    # Si hay un error en la conversión, mostrar la respuesta original para depurar
-                    print(f"Error al convertir la respuesta a letras. Respuesta original: '{texto_respuesta}'. Error: {e}")
-            else:
-                print("Gemini no devolvió texto en la respuesta.")
+            print(respuesta.text)
             print("---------------------------\n")
 
         except FileNotFoundError:
