@@ -31,18 +31,12 @@ from PIL import Image
 CAPTURE_FOLDER = "capturas"  # Carpeta para guardar las imágenes
 # La API Key se cargará desde el archivo .env o variables de entorno
 GEMINI_API_KEY = None
-#PROMPT_PARA_GEMINI = """Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones. """
-PROMPT_PARA_GEMINI = """Estoy realizando el examen de certificación PSM I (Professional Scrum Master I). Para la pregunta en la imagen adjunta (que está en inglés), por favor:
-1. Traduce la pregunta completa y sus opciones al español. Es crucial que al traducir NO traduzcas los siguientes términos específicos de Scrum y Agile (mantenlos en inglés): Product Owner, Scrum Master, Developers, Scrum Team, Sprint, Sprint Planning, Daily Scrum, Sprint Review, Sprint Retrospective, Product Backlog, Sprint Backlog, Increment, Definition of Done, Product Goal, Sprint Goal, stakeholders, Agile, Scrum Guide.
-2. A continuación, y basándote estrictamente en la Guía Scrum oficial, proporciona la(s) letra(s) de la(s) opción(es) correcta(s) a la pregunta original.
+PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.
+Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde A.
+- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: B
+- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: AC
+- No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras."""
 
-El formato de salida debe ser exactamente el siguiente:
-Pregunta Traducida:
-[Aquí la pregunta traducida con sus opciones, manteniendo los términos clave en inglés]
-
-Respuesta: [Aquí la(s) letra(s) de la(s) opción(es) correcta(s) de la pregunta original, por ejemplo: A o A, C]
-
-No incluyas ninguna otra explicación, encabezados adicionales o comentarios fuera de este formato."""
 MODELO_GEMINI = 'gemini-2.5-flash' # Modelo multimodal recomendado
 
 # --- Lógica de Captura de Pantalla ---
@@ -236,7 +230,32 @@ class ManejadorCapturas(FileSystemEventHandler):
                 return
 
             print("\n--- Respuesta de Gemini ---")
-            print(respuesta.text)
+            # Lógica para convertir la respuesta numérica de Gemini a letras (A, B, C...)
+            texto_respuesta = respuesta.text.strip()
+            letras_finales = ""
+            
+            if texto_respuesta:
+                try:
+                    # Mapeo de número (como string) a letra. '1'->'A', '2'->'B', etc.
+                    mapa_letras = {str(i+1): chr(ord('A') + i) for i in range(26)}
+                    
+                    # Separar por si hay múltiples respuestas (ej. "1,3") y quitar espacios
+                    indices = texto_respuesta.replace(" ", "").split(',')
+                    
+                    # Convertir cada índice numérico a su letra correspondiente
+                    letras = [mapa_letras.get(i) for i in indices if i in mapa_letras]
+                    letras_finales = "".join(letras)
+
+                    if letras_finales:
+                        print(letras_finales) # Salida deseada: A, B, AC, etc.
+                    else:
+                        # Si Gemini devuelve algo que no son números (ej. texto de explicación)
+                        print(f"Respuesta no reconocida de Gemini: '{texto_respuesta}'")
+                except Exception as e:
+                    # Si hay un error en la conversión, mostrar la respuesta original para depurar
+                    print(f"Error al convertir la respuesta a letras. Respuesta original: '{texto_respuesta}'. Error: {e}")
+            else:
+                print("Gemini no devolvió texto en la respuesta.")
             print("---------------------------\n")
 
         except FileNotFoundError:
@@ -278,9 +297,9 @@ def main():
         # modelo_gemini.generate_content("test") 
         print(f"Modelo Gemini '{MODELO_GEMINI}' inicializado correctamente.")
     except Exception as e:
-        print(f"Error al inicializar el modelo Gemini: {e}")
+        print(f"Error al inicializar el modelo Gemini '{MODELO_GEMINI}': {e}")
         print(f"Asegúrate de que tu API key es válida y tienes acceso al modelo '{MODELO_GEMINI}'.")
-        print("Puedes probar con 'gemini-pro-vision' si este modelo no está disponible para tu cuenta.")
+        print("Puedes probar con 'gemini-1.5-flash-latest' si este modelo no está disponible para tu cuenta.")
         return
 
     # Crear la carpeta de capturas si no existe
