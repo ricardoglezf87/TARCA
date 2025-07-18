@@ -1,2 +1,3 @@
 capturas/
 .env
+__pycache__/

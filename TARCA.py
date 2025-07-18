@@ -3,6 +3,7 @@ import os
 import time
 import threading
 from datetime import datetime
+from ticker_display import initialize_ticker, update_ticker
 
 # Para escuchar el teclado (F2) y el ratón
 from pynput import keyboard, mouse
@@ -228,11 +229,9 @@ class ManejadorCapturas(FileSystemEventHandler):
                 else:
                     print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
                 return
-
-            print("\n--- Respuesta de Gemini ---")
-            print(respuesta.text)
-            print("---------------------------\n")
-
+            
+            # Actualizar el ticker con la respuesta de Gemini
+            update_ticker(respuesta.text.strip())
         except FileNotFoundError:
             print(f"Error: Archivo de imagen no encontrado durante el procesamiento: {ruta_imagen}")
             self.archivos_procesados.discard(ruta_imagen)
@@ -286,6 +285,12 @@ def main():
             print(f"Error al crear la carpeta de capturas '{CAPTURE_FOLDER}': {e}")
             return
 
+    # Evento para coordinar un cierre limpio de la aplicación
+    shutdown_event = threading.Event()
+
+    # Inicializar el ticker
+    # Pasamos el evento de cierre para que el ícono pueda notificar al hilo principal
+    initialize_ticker(shutdown_event)
 
     # Iniciar el listener de teclado en un hilo separado para no bloquear el programa principal
     hilo_escucha_teclado = threading.Thread(target=iniciar_escucha_teclado, daemon=True)
@@ -310,15 +315,18 @@ def main():
 
 
     try:
-        # Mantener el programa principal en ejecución
-        while True:
-            time.sleep(1)
+        # Mantener el programa principal en ejecución hasta que se señale el cierre
+        # desde el ícono de la bandeja del sistema o por Ctrl+C.
+        shutdown_event.wait()
     except KeyboardInterrupt:
-        print("\nDeteniendo la aplicación (Ctrl+C presionado)...")
+        print("\nCierre solicitado por el usuario (Ctrl+C)...")
+    except Exception as e:
+        print(f"Error inesperado: {e}")
     finally:
+        print("Iniciando secuencia de apagado...")
         observador.stop()
-        observador.join() # Esperar a que el observador termine limpiamente
-        print("Aplicación detenida.")
+        observador.join()  # Esperar a que el observador termine limpiamente
+        print("Aplicación detenida correctamente.")
 
 if __name__ == "__main__":
     main()
