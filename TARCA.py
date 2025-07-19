@@ -3,7 +3,7 @@ import os
 import time
 import threading
 from datetime import datetime
-from ticker_display import initialize_ticker, update_ticker
+from ticker_display import initialize_ticker, update_ticker, show_processing_state, reset_to_default_state
 
 # Para escuchar el teclado (F2) y el ratón
 from pynput import keyboard, mouse
@@ -190,6 +190,9 @@ class ManejadorCapturas(FileSystemEventHandler):
 
     def procesar_con_gemini(self, ruta_imagen):
         """Envía la imagen a Gemini y muestra la respuesta."""
+        # Indicar al usuario que el procesamiento ha comenzado
+        show_processing_state()
+
         if not self.modelo_gemini:
             print("Error: El modelo Gemini no está configurado. Verifica la API Key.")
             # Intenta recargar la API Key si no estaba disponible al inicio
@@ -205,14 +208,17 @@ class ManejadorCapturas(FileSystemEventHandler):
                 except Exception as e:
                     print(f"Error al re-inicializar modelo Gemini: {e}")
                     self.archivos_procesados.discard(ruta_imagen) # Permitir reintento
+                    reset_to_default_state()
                     return
             else:
                 print("API Key de Gemini sigue sin encontrarse.")
                 self.archivos_procesados.discard(ruta_imagen) # Permitir reintento
+                reset_to_default_state()
                 return
 
         try:
-            print(f"Procesando '{os.path.basename(ruta_imagen)}' con Gemini...")
+            # El cambio de ícono ya notifica al usuario. El print es para el log.
+            print(f"Enviando '{os.path.basename(ruta_imagen)}' a Gemini...")
             imagen = Image.open(ruta_imagen)
             
             respuesta = self.modelo_gemini.generate_content([PROMPT_PARA_GEMINI, imagen])
@@ -228,6 +234,7 @@ class ManejadorCapturas(FileSystemEventHandler):
                             print(f"  Categoría de seguridad: {rating.category}, Probabilidad: {rating.probability}")
                 else:
                     print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
+                reset_to_default_state()
                 return
             
             # Actualizar el ticker con la respuesta de Gemini
@@ -235,11 +242,13 @@ class ManejadorCapturas(FileSystemEventHandler):
         except FileNotFoundError:
             print(f"Error: Archivo de imagen no encontrado durante el procesamiento: {ruta_imagen}")
             self.archivos_procesados.discard(ruta_imagen)
+            reset_to_default_state()
         except Exception as e:
             print(f"Error al procesar con Gemini: {e}")
             # Si fue un error temporal, permitir reintento eliminándolo del set
             if ruta_imagen in self.archivos_procesados:
                  self.archivos_procesados.discard(ruta_imagen)
+            reset_to_default_state()
         finally:
             # Opcional: eliminar la imagen después de procesarla
             # try:

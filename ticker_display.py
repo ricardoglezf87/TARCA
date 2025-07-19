@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 # --- Variables globales ---
 tray_icon = None
 shutdown_event_global = None
+last_known_answer = "" # Variable para guardar la última respuesta
 
 # --- Funciones del ícono de la bandeja del sistema ---
 
@@ -64,6 +65,29 @@ def run_widget():
 
 # --- Funciones públicas para controlar el ticker ---
 
+def _set_icon_state(text, title):
+    """Función interna para actualizar el ícono y el tooltip."""
+    if tray_icon:
+        new_icon = create_text_icon(text)
+        tray_icon.icon = new_icon
+        tray_icon.title = title
+
+def show_processing_state():
+    """Muestra un ícono de 'procesando' en la bandeja del sistema."""
+    if last_known_answer:
+        # Si hay una respuesta anterior, la muestra con un punto
+        processing_text = f"{last_known_answer}."
+    else:
+        # Si es la primera vez o se reseteó, muestra "..."
+        processing_text = "..."
+    _set_icon_state(processing_text, "Procesando con IA...")
+
+def reset_to_default_state():
+    """Restaura el ícono al estado inicial."""
+    global last_known_answer
+    _set_icon_state("TARCA", "TARCA: Listo para analizar.")
+    last_known_answer = "" # Limpiar la última respuesta conocida
+
 def initialize_ticker(shutdown_event):
     """Inicializa y ejecuta el widget en un hilo separado."""
     global shutdown_event_global
@@ -74,18 +98,17 @@ def initialize_ticker(shutdown_event):
 
 def update_ticker(data):
     """Función pública para actualizar el texto del widget desde el hilo principal."""
+    global last_known_answer # Necesario para modificar la variable global
     if tray_icon:
         clean_data = data.strip()
 
         # Si la respuesta está vacía, no hacer nada para evitar un ícono invisible.
         if not clean_data:
-            print("Respuesta de IA vacía, no se actualiza el ícono.")
-            # Opcionalmente, se podría mostrar un ícono de error, por ejemplo:
-            # tray_icon.icon = create_text_icon("?")
+            print("Respuesta de IA vacía, se restaura el ícono.")
+            reset_to_default_state()
+            # last_known_answer ya se limpia en reset_to_default_state()
             return
 
         # Generar un nuevo ícono con el texto de la respuesta
-        new_icon = create_text_icon(clean_data)
-        tray_icon.icon = new_icon
-        # Actualizar también el tooltip que aparece al pasar el ratón
-        tray_icon.title = f"{clean_data}"
+        _set_icon_state(clean_data, f"Respuesta: {clean_data}")
+        last_known_answer = clean_data # Guardar la respuesta actual para el próximo procesamiento
