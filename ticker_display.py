@@ -1,11 +1,12 @@
 import threading
-from pystray import Icon, MenuItem
+from pystray import Icon, MenuItem, Menu
 from PIL import Image, ImageDraw, ImageFont
 
 # --- Variables globales ---
 tray_icon = None
 shutdown_event_global = None
 last_known_answer = "" # Variable para guardar la última respuesta
+ninja_mode_enabled = False # Para controlar el estado del modo ninja
 
 # --- Funciones del ícono de la bandeja del sistema ---
 
@@ -42,6 +43,56 @@ def create_text_icon(text):
 
     return image
 
+def create_ninja_icon(text):
+    """
+    Crea un ícono con un punto en una posición específica basada en el texto de la respuesta.
+    El ícono es un cuadrado de 64x64 con fondo transparente.
+    """
+    size = 64
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    # Mapeo de letras a posiciones relativas en el cuadrado
+    positions = {
+        # Opciones de respuesta (A=1, B=2, etc.)
+        "A": (size * 0.25, size * 0.25), # Superior izquierda
+        "B": (size * 0.75, size * 0.25), # Superior derecha
+        "C": (size * 0.25, size * 0.75), # Inferior izquierda
+        "D": (size * 0.75, size * 0.75), # Inferior derecha
+        "E": (size * 0.25, size * 0.50), # Centro izquierda
+        # Estado de procesamiento
+        "processing": (size * 0.75, size * 0.50) # Centro derecha
+    }
+
+    dot_radius = 8
+    clean_text = text.strip().upper()
+
+    # Usamos "..." como señal interna para el estado de procesamiento
+    if clean_text == "...":
+        clean_text = "processing"
+
+    # Iteramos por si la respuesta contiene múltiples letras (ej: "AC")
+    for char in clean_text:
+        if char in positions:
+            x, y = positions[char]
+            # Dibujar un círculo blanco con contorno negro para máxima visibilidad
+            draw.ellipse(
+                (x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius),
+                fill="white",
+                outline="black",
+                width=2
+            )
+
+    return image
+
+def toggle_ninja_mode():
+    """Activa o desactiva el modo ninja y actualiza el ícono para reflejar el cambio."""
+    global ninja_mode_enabled
+    ninja_mode_enabled = not ninja_mode_enabled
+    # Forzar una actualización del ícono para que muestre el modo actual
+    update_ticker(last_known_answer) if last_known_answer else reset_to_default_state()
+
+
 def exit_action():
     """Notifica al hilo principal que debe terminar y detiene el ícono."""
     if shutdown_event_global:
@@ -57,7 +108,15 @@ def run_widget():
     initial_icon = create_text_icon("TARCA")
     
     # Definir el menú del clic derecho
-    menu = (MenuItem('Exit TARCA', exit_action),)
+    menu = (
+        MenuItem(
+            'Ninja Mode',
+            toggle_ninja_mode,
+            checked=lambda item: ninja_mode_enabled
+        ),
+        Menu.SEPARATOR,
+        MenuItem('Exit TARCA', exit_action)
+    )
     
     # Crear y ejecutar el ícono de pystray
     tray_icon = Icon('TARCA', initial_icon, "TARCA: Listo para analizar.", menu)
@@ -67,14 +126,24 @@ def run_widget():
 
 def _set_icon_state(text, title):
     """Función interna para actualizar el ícono y el tooltip."""
-    if tray_icon:
+    if not tray_icon:
+        return
+
+    # Si el modo ninja está activo y el texto no es el de reseteo "TARCA", usa el ícono de puntos.
+    if ninja_mode_enabled and text != "TARCA":
+        new_icon = create_ninja_icon(text)
+    else:
+        # De lo contrario, usa el ícono de texto normal.
         new_icon = create_text_icon(text)
-        tray_icon.icon = new_icon
-        tray_icon.title = title
+    
+    tray_icon.icon = new_icon
+    tray_icon.title = title
 
 def show_processing_state():
     """Muestra un ícono de 'procesando' en la bandeja del sistema."""
-    if last_known_answer:
+    if ninja_mode_enabled:
+        processing_text = "..."
+    elif last_known_answer:
         # Si hay una respuesta anterior, la muestra con un punto
         processing_text = f"{last_known_answer}."
     else:
