@@ -50,35 +50,39 @@ def create_ninja_icon(text):
     """
     size = 64
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    clean_text = text.strip().upper()
+
+    # Cuando está procesando ("..."), el ícono se queda en blanco (transparente).
+    if clean_text == "...":
+        return image
+
     draw = ImageDraw.Draw(image)
 
     # Mapeo de letras a posiciones relativas en el cuadrado
     positions = {
         # Opciones de respuesta (A=1, B=2, etc.)
-        "A": (size * 0.25, size * 0.25), # Superior izquierda
-        "B": (size * 0.75, size * 0.25), # Superior derecha
-        "C": (size * 0.25, size * 0.75), # Inferior izquierda
-        "D": (size * 0.75, size * 0.75), # Inferior derecha
-        "E": (size * 0.25, size * 0.50), # Centro izquierda
-        # Estado de procesamiento
-        "processing": (size * 0.75, size * 0.50) # Centro derecha
+        "A": (size * 0.25, size * 0.25), 
+        "B": (size * 0.75, size * 0.25), 
+        "C": (size * 0.25, size * 0.75), 
+        "D": (size * 0.75, size * 0.75), 
+        "E": (size * 0.25, size * 0.25), 
+        "F": (size * 0.75, size * 0.25), 
+        "G": (size * 0.25, size * 0.75), 
+        "H": (size * 0.75, size * 0.75)
     }
 
     dot_radius = 8
-    clean_text = text.strip().upper()
 
-    # Usamos "..." como señal interna para el estado de procesamiento
-    if clean_text == "...":
-        clean_text = "processing"
-
-    # Iteramos por si la respuesta contiene múltiples letras (ej: "AC")
+    # Iteramos por si la respuesta contiene múltiples letras (ej: "ACF")
     for char in clean_text:
         if char in positions:
+            # Para las opciones centrales (E, F), el círculo es gris para distinguirlas.
+            fill_color = "grey" if char in ('E', 'F' , 'G', 'H') else "white"
+            
             x, y = positions[char]
-            # Dibujar un círculo blanco con contorno negro para máxima visibilidad
             draw.ellipse(
                 (x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius),
-                fill="white",
+                fill=fill_color,
                 outline="black",
                 width=2
             )
