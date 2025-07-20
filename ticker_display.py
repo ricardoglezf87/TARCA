@@ -123,7 +123,7 @@ def run_widget():
     )
     
     # Crear y ejecutar el ícono de pystray
-    tray_icon = Icon('TARCA', initial_icon, "TARCA: Listo para analizar.", menu)
+    tray_icon = Icon('TARCA', initial_icon, "TARCA", menu)
     tray_icon.run()
 
 # --- Funciones públicas para controlar el ticker ---
@@ -153,12 +153,12 @@ def show_processing_state():
     else:
         # Si es la primera vez o se reseteó, muestra "..."
         processing_text = "..."
-    _set_icon_state(processing_text, "Procesando con IA...")
+    _set_icon_state(processing_text, "TARCA")
 
 def reset_to_default_state():
     """Restaura el ícono al estado inicial."""
     global last_known_answer
-    _set_icon_state("TARCA", "TARCA: Listo para analizar.")
+    _set_icon_state("TARCA", "TARCA")
     last_known_answer = "" # Limpiar la última respuesta conocida
 
 def initialize_ticker(shutdown_event, ninja_mode_initial_state=False):
@@ -184,5 +184,5 @@ def update_ticker(data):
             return
 
         # Generar un nuevo ícono con el texto de la respuesta
-        _set_icon_state(clean_data, f"Respuesta: {clean_data}")
+        _set_icon_state(clean_data, f"TARCA")
         last_known_answer = clean_data # Guardar la respuesta actual para el próximo procesamiento
