@@ -3,6 +3,7 @@ import os
 import time
 import threading
 from datetime import datetime
+from ticker_display import initialize_ticker, update_ticker, show_processing_state, reset_to_default_state
 
 # Para escuchar el teclado (F2) y el ratón
 from pynput import keyboard, mouse
@@ -31,18 +32,12 @@ from PIL import Image
 CAPTURE_FOLDER = "capturas"  # Carpeta para guardar las imágenes
 # La API Key se cargará desde el archivo .env o variables de entorno
 GEMINI_API_KEY = None
-#PROMPT_PARA_GEMINI = """Da la respuesta correcta a la pregunta que muestra la imagen enviada sin explicaciones. """
-PROMPT_PARA_GEMINI = """Estoy realizando el examen de certificación PSM I (Professional Scrum Master I). Para la pregunta en la imagen adjunta (que está en inglés), por favor:
-1. Traduce la pregunta completa y sus opciones al español. Es crucial que al traducir NO traduzcas los siguientes términos específicos de Scrum y Agile (mantenlos en inglés): Product Owner, Scrum Master, Developers, Scrum Team, Sprint, Sprint Planning, Daily Scrum, Sprint Review, Sprint Retrospective, Product Backlog, Sprint Backlog, Increment, Definition of Done, Product Goal, Sprint Goal, stakeholders, Agile, Scrum Guide.
-2. A continuación, y basándote estrictamente en la Guía Scrum oficial, proporciona la(s) letra(s) de la(s) opción(es) correcta(s) a la pregunta original.
+PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.
+Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde A.
+- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: B
+- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: AC
+- No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras."""
 
-El formato de salida debe ser exactamente el siguiente:
-Pregunta Traducida:
-[Aquí la pregunta traducida con sus opciones, manteniendo los términos clave en inglés]
-
-Respuesta: [Aquí la(s) letra(s) de la(s) opción(es) correcta(s) de la pregunta original, por ejemplo: A o A, C]
-
-No incluyas ninguna otra explicación, encabezados adicionales o comentarios fuera de este formato."""
 MODELO_GEMINI = 'gemini-2.5-flash' # Modelo multimodal recomendado
 
 # --- Lógica de Captura de Pantalla ---
@@ -195,6 +190,9 @@ class ManejadorCapturas(FileSystemEventHandler):
 
     def procesar_con_gemini(self, ruta_imagen):
         """Envía la imagen a Gemini y muestra la respuesta."""
+        # Indicar al usuario que el procesamiento ha comenzado
+        show_processing_state()
+
         if not self.modelo_gemini:
             print("Error: El modelo Gemini no está configurado. Verifica la API Key.")
             # Intenta recargar la API Key si no estaba disponible al inicio
@@ -210,14 +208,17 @@ class ManejadorCapturas(FileSystemEventHandler):
                 except Exception as e:
                     print(f"Error al re-inicializar modelo Gemini: {e}")
                     self.archivos_procesados.discard(ruta_imagen) # Permitir reintento
+                    reset_to_default_state()
                     return
             else:
                 print("API Key de Gemini sigue sin encontrarse.")
                 self.archivos_procesados.discard(ruta_imagen) # Permitir reintento
+                reset_to_default_state()
                 return
 
         try:
-            print(f"Procesando '{os.path.basename(ruta_imagen)}' con Gemini...")
+            # El cambio de ícono ya notifica al usuario. El print es para el log.
+            print(f"Enviando '{os.path.basename(ruta_imagen)}' a Gemini...")
             imagen = Image.open(ruta_imagen)
             
             respuesta = self.modelo_gemini.generate_content([PROMPT_PARA_GEMINI, imagen])
@@ -233,20 +234,21 @@ class ManejadorCapturas(FileSystemEventHandler):
                             print(f"  Categoría de seguridad: {rating.category}, Probabilidad: {rating.probability}")
                 else:
                     print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
+                reset_to_default_state()
                 return
-
-            print("\n--- Respuesta de Gemini ---")
-            print(respuesta.text)
-            print("---------------------------\n")
-
+            
+            # Actualizar el ticker con la respuesta de Gemini
+            update_ticker(respuesta.text.strip())
         except FileNotFoundError:
             print(f"Error: Archivo de imagen no encontrado durante el procesamiento: {ruta_imagen}")
             self.archivos_procesados.discard(ruta_imagen)
+            reset_to_default_state()
         except Exception as e:
             print(f"Error al procesar con Gemini: {e}")
             # Si fue un error temporal, permitir reintento eliminándolo del set
             if ruta_imagen in self.archivos_procesados:
                  self.archivos_procesados.discard(ruta_imagen)
+            reset_to_default_state()
         finally:
             # Opcional: eliminar la imagen después de procesarla
             # try:
@@ -264,6 +266,9 @@ def main():
     # Cargar variables de entorno del archivo .env (si existe)
     load_dotenv()
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    # Leer el estado inicial del modo ninja desde .env, por defecto es 'false'
+    ninja_mode_default_str = os.getenv("NINJA_MODE_DEFAULT", "false").lower()
+    ninja_mode_initial_state = ninja_mode_default_str in ('true', '1', 't', 'y', 'yes')
 
     if not GEMINI_API_KEY:
         print("Error Crítico: La API Key de Gemini no está configurada.")
@@ -278,9 +283,9 @@ def main():
         # modelo_gemini.generate_content("test") 
         print(f"Modelo Gemini '{MODELO_GEMINI}' inicializado correctamente.")
     except Exception as e:
-        print(f"Error al inicializar el modelo Gemini: {e}")
+        print(f"Error al inicializar el modelo Gemini '{MODELO_GEMINI}': {e}")
         print(f"Asegúrate de que tu API key es válida y tienes acceso al modelo '{MODELO_GEMINI}'.")
-        print("Puedes probar con 'gemini-pro-vision' si este modelo no está disponible para tu cuenta.")
+        print("Puedes probar con 'gemini-1.5-flash-latest' si este modelo no está disponible para tu cuenta.")
         return
 
     # Crear la carpeta de capturas si no existe
@@ -292,6 +297,12 @@ def main():
             print(f"Error al crear la carpeta de capturas '{CAPTURE_FOLDER}': {e}")
             return
 
+    # Evento para coordinar un cierre limpio de la aplicación
+    shutdown_event = threading.Event()
+
+    # Inicializar el ticker
+    # Pasamos el evento de cierre y el estado inicial del modo ninja
+    initialize_ticker(shutdown_event, ninja_mode_initial_state=ninja_mode_initial_state)
 
     # Iniciar el listener de teclado en un hilo separado para no bloquear el programa principal
     hilo_escucha_teclado = threading.Thread(target=iniciar_escucha_teclado, daemon=True)
@@ -316,15 +327,18 @@ def main():
 
 
     try:
-        # Mantener el programa principal en ejecución
-        while True:
-            time.sleep(1)
+        # Mantener el programa principal en ejecución hasta que se señale el cierre
+        # desde el ícono de la bandeja del sistema o por Ctrl+C.
+        shutdown_event.wait()
     except KeyboardInterrupt:
-        print("\nDeteniendo la aplicación (Ctrl+C presionado)...")
+        print("\nCierre solicitado por el usuario (Ctrl+C)...")
+    except Exception as e:
+        print(f"Error inesperado: {e}")
     finally:
+        print("Iniciando secuencia de apagado...")
         observador.stop()
-        observador.join() # Esperar a que el observador termine limpiamente
-        print("Aplicación detenida.")
+        observador.join()  # Esperar a que el observador termine limpiamente
+        print("Aplicación detenida correctamente.")
 
 if __name__ == "__main__":
     main()
