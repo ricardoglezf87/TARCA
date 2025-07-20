@@ -157,10 +157,11 @@ def reset_to_default_state():
     _set_icon_state("TARCA", "TARCA: Listo para analizar.")
     last_known_answer = "" # Limpiar la última respuesta conocida
 
-def initialize_ticker(shutdown_event):
+def initialize_ticker(shutdown_event, ninja_mode_initial_state=False):
     """Inicializa y ejecuta el widget en un hilo separado."""
-    global shutdown_event_global
+    global shutdown_event_global, ninja_mode_enabled
     shutdown_event_global = shutdown_event
+    ninja_mode_enabled = ninja_mode_initial_state
     
     icon_thread = threading.Thread(target=run_widget, daemon=True)
     icon_thread.start()

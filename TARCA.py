@@ -266,6 +266,9 @@ def main():
     # Cargar variables de entorno del archivo .env (si existe)
     load_dotenv()
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    # Leer el estado inicial del modo ninja desde .env, por defecto es 'false'
+    ninja_mode_default_str = os.getenv("NINJA_MODE_DEFAULT", "false").lower()
+    ninja_mode_initial_state = ninja_mode_default_str in ('true', '1', 't', 'y', 'yes')
 
     if not GEMINI_API_KEY:
         print("Error Crítico: La API Key de Gemini no está configurada.")
@@ -298,8 +301,8 @@ def main():
     shutdown_event = threading.Event()
 
     # Inicializar el ticker
-    # Pasamos el evento de cierre para que el ícono pueda notificar al hilo principal
-    initialize_ticker(shutdown_event)
+    # Pasamos el evento de cierre y el estado inicial del modo ninja
+    initialize_ticker(shutdown_event, ninja_mode_initial_state=ninja_mode_initial_state)
 
     # Iniciar el listener de teclado en un hilo separado para no bloquear el programa principal
     hilo_escucha_teclado = threading.Thread(target=iniciar_escucha_teclado, daemon=True)
