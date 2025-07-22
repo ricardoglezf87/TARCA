@@ -46,7 +46,8 @@ def create_text_icon(text):
 def create_ninja_icon(text):
     """
     Crea un ícono con un punto en una posición específica basada en el texto de la respuesta.
-    El ícono es un cuadrado de 64x64 con fondo transparente.
+    El ícono es un cuadrado de 64x64 con fondo transparente y una barra de referencia
+    a la izquierda para mejorar la visibilidad.
     """
     size = 64
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -57,6 +58,10 @@ def create_ninja_icon(text):
         return image
 
     draw = ImageDraw.Draw(image)
+
+    # Dibujar una barra vertical blanca a la izquierda como referencia visual.
+    # La línea tendrá 2px de ancho para ser visible.
+    draw.line([(1, 0), (1, size)], fill="gray", width=2)
 
     # Mapeo de letras a posiciones relativas en el cuadrado
     positions = {
