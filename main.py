@@ -9,29 +9,13 @@ from ticker_display import initialize_ticker
 
 # --- Configuración ---
 CAPTURE_FOLDER = "capturas"
-MODELO_GEMINI = 'gemini-2.5-flash'
 
 def main():
     # Cargar variables de entorno del archivo .env (si existe)
     load_dotenv()
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+   
     ninja_mode_default_str = os.getenv("NINJA_MODE_DEFAULT", "false").lower()
-    ninja_mode_initial_state = ninja_mode_default_str in ('true', '1', 't', 'y', 'yes')
-
-    if not GEMINI_API_KEY:
-        print("Error Crítico: La API Key de Gemini no está configurada.")
-        print("Por favor, crea un archivo .env con la línea: GEMINI_API_KEY='TU_API_KEY'")
-        print("O establece la variable de entorno GEMINI_API_KEY.")
-        return
-
-    try:
-        from google.generativeai import configure, GenerativeModel
-        configure(api_key=GEMINI_API_KEY)
-        modelo_gemini = GenerativeModel(MODELO_GEMINI)
-        print(f"Modelo Gemini '{MODELO_GEMINI}' inicializado correctamente.")
-    except Exception as e:
-        print(f"Error al inicializar el modelo Gemini '{MODELO_GEMINI}': {e}")
-        return
+    ninja_mode_initial_state = ninja_mode_default_str in ('true', '1', 't', 'y', 'yes')   
 
     if not os.path.exists(CAPTURE_FOLDER):
         try:
@@ -51,7 +35,7 @@ def main():
     hilo_escucha_raton.start()
 
     print(f"Las capturas se guardarán en la carpeta '{CAPTURE_FOLDER}'.")
-    manejador_eventos = ManejadorCapturas(modelo_gemini=modelo_gemini)
+    manejador_eventos = ManejadorCapturas()
     observador = Observer()
     try:
         observador.schedule(manejador_eventos, CAPTURE_FOLDER, recursive=False)
