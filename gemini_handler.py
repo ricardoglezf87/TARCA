@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 
 # --- Configuración ---
 PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.
-Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde A.
-- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: B
-- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: AC
-- No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras."""
+Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde #A#.
+- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: #B#
+- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: #AC#
+- No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras. """
 MODELO_GEMINI = 'gemini-2.5-flash'
 
 class ManejadorCapturas(FileSystemEventHandler):
