@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 
 # --- Configuración ---
 PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.
-Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde #A#.
-- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: #B#
-- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: #AC#
+Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde A.
+- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: B
+- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: AC
 - No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras. """
 MODELO_GEMINI = 'gemini-2.5-flash'
 
@@ -40,64 +40,20 @@ class ManejadorCapturas(FileSystemEventHandler):
         GOOGLE_SEARCH = os.getenv ("GOOGLE_SEARCH", "false").lower()    
         
         if GOOGLE_SEARCH == "true":
-            from google import genai
+            from google_search_handler import GoogleSearchHandler
             
-            # Configure the client
-            client = genai.Client()
-
-            # Define the grounding tool
-            grounding_tool = types.Tool(
-                google_search=types.GoogleSearch()
+            google_handler = GoogleSearchHandler()
+            textoRespuesta = google_handler.process_image(
+                ruta_imagen, PROMPT_PARA_GEMINI, MODELO_GEMINI
             )
-
-            # Configure generation settings
-            config = types.GenerateContentConfig(
-                tools=[grounding_tool]
-            )
-
-            try:
-                
-                imagen = Image.open(ruta_imagen)
-                                
-                # Make the request
-                respuesta = client.models.generate_content(
-                    model=MODELO_GEMINI,
-                    contents=[PROMPT_PARA_GEMINI, imagen],
-                    config=config,
-                )                
-                
-                if not respuesta:
-                    razon_bloqueo = "No especificada"
-                    if hasattr(respuesta, 'prompt_feedback') and respuesta.prompt_feedback.block_reason:
-                        razon_bloqueo = respuesta.prompt_feedback.block_reason
-                        print(f"La solicitud a Gemini fue bloqueada. Razón: {razon_bloqueo}")
-                        if respuesta.prompt_feedback.safety_ratings:
-                            for rating in respuesta.prompt_feedback.safety_ratings:
-                                print(f"  Categoría de seguridad: {rating.category}, Probabilidad: {rating.probability}")
-                    else:
-                        print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
-                    
-                    reset_to_default_state()
-                    
-                    return
-                
-                if not respuesta.candidates[0].content.parts[0]:                
-                    print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
-                    reset_to_default_state()                    
-                    return
             
-                textoRespuesta = respuesta.candidates[0].content.parts[0].text
-                print (textoRespuesta)
-                update_ticker(textoRespuesta.strip())
-            except FileNotFoundError:
-                print(f"Error: Archivo de imagen no encontrado durante el procesamiento: {ruta_imagen}")
-                self.archivos_procesados.discard(ruta_imagen)
+            if not textoRespuesta:
+                print("Google Search no devolvió contenido. Verifica la imagen o el prompt.")
                 reset_to_default_state()
-            except Exception as e:
-                print(f"Error al procesar con Gemini: {e}")
-                if ruta_imagen in self.archivos_procesados:
-                    self.archivos_procesados.discard(ruta_imagen)
-                reset_to_default_state()
+                return
+            
+            print(textoRespuesta)
+            update_ticker(textoRespuesta.strip())
         else:        
             import google.generativeai as genai
             
