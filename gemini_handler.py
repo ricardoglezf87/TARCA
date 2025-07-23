@@ -6,6 +6,7 @@ from PIL import Image
 from google.genai import types
 from ticker_display import update_ticker, reset_to_default_state, show_processing_state
 from dotenv import load_dotenv
+from prompts import PROMPT_PARA_GEMINI
 
 # --- Configuración ---
 PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.

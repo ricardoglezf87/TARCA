@@ -3,6 +3,8 @@ from google.genai import types
 from google import genai
 from PIL import Image
 
+from prompts import PROMPT_PARA_GOOGLE_SEARCH
+
 class GoogleSearchHandler:
     def __init__(self):
         self.client = genai.Client()
@@ -13,12 +15,12 @@ class GoogleSearchHandler:
             tools=[self.grounding_tool]
         )
 
-    def process_image(self, ruta_imagen, prompt, modelo):
+    def process_image(self, ruta_imagen, modelo):
         try:
             imagen = Image.open(ruta_imagen)
             respuesta = self.client.models.generate_content(
                 model=modelo,
-                contents=[prompt, imagen],
+                contents=[PROMPT_PARA_GOOGLE_SEARCH, imagen],
                 config=self.config,
             )
             if not respuesta or not respuesta.candidates[0].content.parts[0]:
