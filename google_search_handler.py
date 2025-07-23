@@ -15,12 +15,12 @@ class GoogleSearchHandler:
             tools=[self.grounding_tool]
         )
 
-    def process_image(self, ruta_imagen, modelo):
+    def process_image(self, ruta_imagen, prompt, modelo):
         try:
             imagen = Image.open(ruta_imagen)
             respuesta = self.client.models.generate_content(
                 model=modelo,
-                contents=[PROMPT_PARA_GOOGLE_SEARCH, imagen],
+                contents=[prompt, imagen],
                 config=self.config,
             )
             if not respuesta or not respuesta.candidates[0].content.parts[0]:

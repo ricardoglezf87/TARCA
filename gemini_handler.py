@@ -6,14 +6,9 @@ from PIL import Image
 from google.genai import types
 from ticker_display import update_ticker, reset_to_default_state, show_processing_state
 from dotenv import load_dotenv
-from prompts import PROMPT_PARA_GEMINI
+from prompts import PROMPT_PARA_GEMINI, PROMPT_PARA_GOOGLE_SEARCH
 
 # --- Configuración ---
-PROMPT_PARA_GEMINI = """Analiza la pregunta y las opciones en la imagen.
-Devuelve ÚNICAMENTE la letra  de la opción u opciones correctas, comenzando desde A.
-- Si solo hay una respuesta correcta (p. ej., la segunda opción), devuelve: B
-- Si hay varias respuestas correctas (p. ej., la primera y la tercera), devuelve las letras juntas: AC
-- No añadas texto, explicaciones, ni la palabra "respuesta". Solo las letras. """
 MODELO_GEMINI = 'gemini-2.5-flash'
 
 class ManejadorCapturas(FileSystemEventHandler):
@@ -45,7 +40,7 @@ class ManejadorCapturas(FileSystemEventHandler):
             
             google_handler = GoogleSearchHandler()
             textoRespuesta = google_handler.process_image(
-                ruta_imagen, PROMPT_PARA_GEMINI, MODELO_GEMINI
+                ruta_imagen, PROMPT_PARA_GOOGLE_SEARCH, MODELO_GEMINI
             )
             
             if not textoRespuesta:
