@@ -77,6 +77,11 @@ class ManejadorCapturas(FileSystemEventHandler):
                     reset_to_default_state()
                     
                     return
+                
+                if not respuesta.candidates[0].content.parts[0]:                
+                    print("Gemini no devolvió contenido. Verifica la imagen o el prompt.")
+                    reset_to_default_state()                    
+                    return
             
                 textoRespuesta = respuesta.candidates[0].content.parts[0].text
                 print (textoRespuesta)
