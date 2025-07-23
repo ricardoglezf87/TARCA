@@ -56,10 +56,13 @@ class ManejadorCapturas(FileSystemEventHandler):
             )
 
             try:
+                
+                imagen = Image.open(ruta_imagen)
+                                
                 # Make the request
                 respuesta = client.models.generate_content(
                     model=MODELO_GEMINI,
-                    contents="Who won the euro 2024?",
+                    contents=[PROMPT_PARA_GEMINI, imagen],
                     config=config,
                 )                
                 
