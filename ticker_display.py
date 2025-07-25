@@ -1,6 +1,16 @@
 import threading
 from pystray import Icon, MenuItem, Menu
 from PIL import Image, ImageDraw, ImageFont
+import sys
+
+# Importar winsound para notificaciones de sonido solo en Windows
+try:
+    if sys.platform == "win32":
+        import winsound
+    else:
+        winsound = None
+except ImportError:
+    winsound = None
 
 # --- Variables globales ---
 tray_icon = None
@@ -187,6 +197,15 @@ def update_ticker(data):
             reset_to_default_state()
             # last_known_answer ya se limpia en reset_to_default_state()
             return
+
+        # Reproducir un sonido de notificación si no estamos en modo ninja y el módulo está disponible
+        if not ninja_mode_enabled and winsound:
+            try:
+                # Usamos SND_ASYNC para que la reproducción no bloquee el programa
+                winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            except Exception as e:
+                # En caso de que el sonido del sistema no esté disponible o falle
+                print(f"No se pudo reproducir el sonido de notificación: {e}")
 
         # Generar un nuevo ícono con el texto de la respuesta
         _set_icon_state(clean_data, f"TARCA")
