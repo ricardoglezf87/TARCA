@@ -1,4 +1,3 @@
-google-generativeai
 google-genai
 httpx
 mss
@@ -8,5 +7,6 @@ pyautogui
 pynput
 pystray
 python-dotenv
+certifi
 truststore
 watchdog

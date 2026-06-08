@@ -3,6 +3,7 @@ setlocal
 
 REM Arranca TARCA desde la carpeta donde vive este .bat.
 set "SCRIPT_DIR=%~dp0"
+pushd "%SCRIPT_DIR%"
 
 if /I "%~1"=="console" goto console
 if /I "%~1"=="visible" goto console
@@ -35,4 +36,5 @@ start "TARCA" /B pythonw.exe "%SCRIPT_DIR%main.py"
 goto end
 
 :end
+popd
 endlocal
