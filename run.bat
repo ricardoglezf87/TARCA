@@ -1,10 +1,40 @@
 @echo off
-REM Este script inicia la aplicaciÃ³n TARCA sin una ventana de consola visible.
-REM Utiliza 'pythonw.exe', el intÃ©rprete para aplicaciones Python sin ventana/GUI.
+setlocal
 
-REM Obtiene el directorio donde se encuentra este archivo .bat para que el script sea portable.
+REM Arranca TARCA desde la carpeta donde vive este .bat.
 set "SCRIPT_DIR=%~dp0"
+pushd "%SCRIPT_DIR%"
 
-REM El comando 'start "TÃ­tulo" /B' inicia un programa sin crear una nueva ventana.
-REM Usamos la ruta completa al script de Python para asegurar que se ejecute correctamente.
+if /I "%~1"=="console" goto console
+if /I "%~1"=="visible" goto console
+if /I "%~1"=="background" goto background
+if /I "%~1"=="hidden" goto background
+
+echo.
+echo TARCA - modo de inicio
+echo.
+echo   1. Consola visible con respuestas y errores
+echo   2. Segundo plano sin consola
+echo.
+choice /C 12 /N /M "Elige una opcion [1-2]: "
+if errorlevel 2 goto background
+
+:console
+title TARCA - consola
+echo.
+echo Iniciando TARCA con consola visible...
+echo Cierra esta ventana o usa el menu de bandeja para salir.
+echo.
+python.exe "%SCRIPT_DIR%main.py"
+echo.
+echo TARCA se ha cerrado.
+pause
+goto end
+
+:background
 start "TARCA" /B pythonw.exe "%SCRIPT_DIR%main.py"
+goto end
+
+:end
+popd
+endlocal
