@@ -1,1 +1,12 @@
-pip install pynput mss Pillow pyautogui watchdog google-generativeai python-dotenv pystray google google.genai
+google-generativeai
+google-genai
+httpx
+mss
+openai
+Pillow
+pyautogui
+pynput
+pystray
+python-dotenv
+truststore
+watchdog

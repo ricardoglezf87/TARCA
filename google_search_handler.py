@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
+import os
+
 from google.genai import types
 from google import genai
 from PIL import Image
 
-from prompts import PROMPT_PARA_GOOGLE_SEARCH
-
 class GoogleSearchHandler:
     def __init__(self):
-        self.client = genai.Client()
+        api_key = os.getenv("GEMINI_API_KEY")
+        self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         self.grounding_tool = types.Tool(
             google_search=types.GoogleSearch()
         )

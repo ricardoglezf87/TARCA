@@ -4,7 +4,7 @@ import threading
 from dotenv import load_dotenv
 from watchdog.observers import Observer
 from captura_logic import iniciar_escucha_teclado, iniciar_escucha_raton
-from gemini_handler import ManejadorCapturas
+from ai_handler import ManejadorCapturas
 from ticker_display import initialize_ticker
 
 # --- Configuración ---
