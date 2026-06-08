@@ -1,3 +1,4 @@
 capturas/
 .env
 __pycache__/
+.tarca_cache/
