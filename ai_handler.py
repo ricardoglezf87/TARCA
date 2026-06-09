@@ -1,25 +1,27 @@
 # -*- coding: utf-8 -*-
 import os
 import re
-import ssl
 import time
 
 from watchdog.events import FileSystemEventHandler
 
 from cert_config import configurar_certificados_google, opciones_http_gemini
-from image_utils import imagen_a_data_url, imagen_optimizada
-from prompts import PROMPT_PARA_GEMINI, PROMPT_PARA_GOOGLE_SEARCH, PROMPT_PARA_GPT
+from image_utils import imagen_optimizada
+from prompts import PROMPT_PARA_GEMINI, PROMPT_PARA_GOOGLE_SEARCH
 from ticker_display import reset_to_default_state, show_processing_state, update_ticker
 
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
-DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
-DEFAULT_OPENAI_MAX_OUTPUT_TOKENS = 16
-DEFAULT_OPENAI_TIMEOUT_SECONDS = 30
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_FALLBACK_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+]
 DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 16
 DEFAULT_GEMINI_THINKING_BUDGET = 0
 DEFAULT_CAPTURE_WRITE_DELAY_SECONDS = 0.15
-VALID_PROVIDERS = {"auto", "openai", "gemini"}
+VALID_PROVIDERS = {"auto", "gemini"}
 
 
 def _env_bool(nombre, default=False):
@@ -62,46 +64,6 @@ def _cadena_causas_error(exc):
     return " | ".join(causas)
 
 
-def _configuracion_ssl_openai():
-    if not _env_bool("OPENAI_SSL_VERIFY", True):
-        print("Advertencia: OPENAI_SSL_VERIFY=false desactiva la verificacion SSL.")
-        return False
-
-    ca_bundle = os.getenv("OPENAI_CA_BUNDLE")
-    if ca_bundle:
-        return ca_bundle
-
-    if _env_bool("OPENAI_USE_SYSTEM_CERTS", True):
-        try:
-            import truststore
-
-            return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        except ImportError:
-            print("truststore no esta instalado; se usaran los certificados por defecto de Python.")
-
-    return True
-
-
-def crear_cliente_openai():
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY no esta configurada.")
-
-    import httpx
-    from openai import OpenAI
-
-    http_client = httpx.Client(
-        timeout=_env_float("OPENAI_TIMEOUT_SECONDS", DEFAULT_OPENAI_TIMEOUT_SECONDS),
-        trust_env=_env_bool("OPENAI_TRUST_ENV", False),
-        verify=_configuracion_ssl_openai(),
-    )
-    return OpenAI(
-        api_key=api_key,
-        http_client=http_client,
-        max_retries=_env_int("OPENAI_MAX_RETRIES", 2),
-    )
-
-
 def _normalizar_respuesta_letras(texto):
     if not texto:
         return ""
@@ -118,64 +80,12 @@ def _normalizar_respuesta_letras(texto):
     return texto.strip()
 
 
-def _extraer_texto_openai(respuesta):
-    texto = getattr(respuesta, "output_text", None)
-    if texto:
-        return texto
-
-    partes_texto = []
-    for item in getattr(respuesta, "output", []) or []:
-        for contenido in getattr(item, "content", []) or []:
-            texto_contenido = getattr(contenido, "text", None)
-            if texto_contenido:
-                partes_texto.append(texto_contenido)
-    return "\n".join(partes_texto)
-
-
-class OpenAIImageHandler:
-    def __init__(self, modelo=None, usar_busqueda=False):
-        self.modelo = modelo or os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
-        self.usar_busqueda = usar_busqueda
-        self.client = None
-
-    def _obtener_cliente(self):
-        if self.client is None:
-            self.client = crear_cliente_openai()
-        return self.client
-
-    def process_image(self, ruta_imagen, prompt):
-        data_url = imagen_a_data_url(ruta_imagen)
-        peticion = {
-            "model": self.modelo,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {"type": "input_image", "image_url": data_url},
-                    ],
-                }
-            ],
-            "max_output_tokens": _env_int(
-                "OPENAI_MAX_OUTPUT_TOKENS", DEFAULT_OPENAI_MAX_OUTPUT_TOKENS
-            ),
-        }
-
-        if self.usar_busqueda:
-            peticion["tools"] = [{"type": "web_search"}]
-            peticion["tool_choice"] = "auto"
-
-        respuesta = self._obtener_cliente().responses.create(**peticion)
-        return _normalizar_respuesta_letras(_extraer_texto_openai(respuesta))
-
-
 class ManejadorCapturas(FileSystemEventHandler):
     """Maneja nuevas capturas y las envia al proveedor de IA configurado."""
 
     def __init__(self):
         self.archivos_procesados = set()
         self.proveedor_ia = self._resolver_proveedor_ia()
-        self.openai_handler = None
         self.cliente_gemini = None
         print(f"Proveedor de IA activo: {self.proveedor_ia}")
 
@@ -185,27 +95,22 @@ class ManejadorCapturas(FileSystemEventHandler):
             proveedor = "auto"
 
         if proveedor not in VALID_PROVIDERS:
-            print(f"AI_PROVIDER invalido: {proveedor}. Se usara auto.")
-            proveedor = "auto"
+            print(f"AI_PROVIDER invalido: {proveedor}. Se usara gemini.")
+        return "gemini"
 
-        if proveedor == "auto":
-            if os.getenv("GEMINI_API_KEY"):
-                return "gemini"
-            if os.getenv("OPENAI_API_KEY"):
-                return "openai"
-            return "gemini"
+    def _modelos_gemini_para_intentar(self):
+        modelos = [os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL]
+        fallback_raw = os.getenv("GEMINI_FALLBACK_MODELS", "")
+        fallbacks = (
+            [modelo.strip() for modelo in fallback_raw.split(",") if modelo.strip()]
+            if fallback_raw
+            else DEFAULT_GEMINI_FALLBACK_MODELS
+        )
 
-        return proveedor
-
-    def _proveedores_para_intentar(self):
-        proveedores = [self.proveedor_ia]
-        if (
-            self.proveedor_ia == "gemini"
-            and _env_bool("OPENAI_FALLBACK", True)
-            and os.getenv("OPENAI_API_KEY")
-        ):
-            proveedores.append("openai")
-        return proveedores
+        for modelo in fallbacks:
+            if modelo not in modelos:
+                modelos.append(modelo)
+        return modelos
 
     def on_created(self, evento):
         if evento.is_directory or not evento.src_path.lower().endswith((".png", ".jpg", ".jpeg")):
@@ -228,30 +133,27 @@ class ManejadorCapturas(FileSystemEventHandler):
             return
 
         ultimo_error = None
-        proveedores = self._proveedores_para_intentar()
-        for indice, proveedor in enumerate(proveedores):
+        modelos = self._modelos_gemini_para_intentar()
+        for indice, modelo in enumerate(modelos):
             inicio = time.perf_counter()
             try:
-                if proveedor == "openai":
-                    texto_respuesta = self._procesar_con_openai(ruta_imagen)
-                else:
-                    texto_respuesta = self._procesar_con_gemini(ruta_imagen)
+                texto_respuesta = self._procesar_con_gemini(ruta_imagen, modelo)
 
                 if texto_respuesta:
                     duracion = time.perf_counter() - inicio
-                    print(f"Tiempo {proveedor}: {duracion:.2f}s")
-                    print(f"Respuesta {proveedor}: {texto_respuesta}")
+                    print(f"Tiempo gemini ({modelo}): {duracion:.2f}s")
+                    print(f"Respuesta gemini ({modelo}): {texto_respuesta}")
                     update_ticker(texto_respuesta)
                     return
 
-                print(f"{proveedor} no devolvio contenido util en {time.perf_counter() - inicio:.2f}s.")
+                print(f"Gemini ({modelo}) no devolvio contenido util en {time.perf_counter() - inicio:.2f}s.")
             except Exception as exc:
                 ultimo_error = exc
-                print(f"Error al procesar captura con {proveedor} tras {time.perf_counter() - inicio:.2f}s: {exc}")
+                print(f"Error al procesar captura con Gemini ({modelo}) tras {time.perf_counter() - inicio:.2f}s: {exc}")
                 print(f"Detalle tecnico: {_cadena_causas_error(exc)}")
 
-            if indice < len(proveedores) - 1:
-                print("Intentando proveedor de respaldo...")
+            if indice < len(modelos) - 1:
+                print(f"Intentando modelo Gemini de respaldo: {modelos[indice + 1]}...")
 
         if ultimo_error:
             print("No se pudo obtener respuesta de ningun proveedor disponible.")
@@ -263,19 +165,7 @@ class ManejadorCapturas(FileSystemEventHandler):
         self.archivos_procesados.discard(ruta_imagen)
         reset_to_default_state()
 
-    def _procesar_con_openai(self, ruta_imagen):
-        if self.openai_handler is None:
-            self.openai_handler = OpenAIImageHandler(
-                modelo=os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
-                usar_busqueda=_env_bool("OPENAI_WEB_SEARCH", False),
-            )
-
-        print(f"Enviando '{os.path.basename(ruta_imagen)}' a OpenAI...")
-        return self.openai_handler.process_image(ruta_imagen, PROMPT_PARA_GPT)
-
-    def _procesar_con_gemini(self, ruta_imagen):
-        modelo = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
-
+    def _procesar_con_gemini(self, ruta_imagen, modelo):
         if _env_bool("GOOGLE_SEARCH", False):
             configurar_certificados_google()
             from google_search_handler import GoogleSearchHandler
