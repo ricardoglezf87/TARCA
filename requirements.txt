@@ -1,12 +1,10 @@
 google-genai
 httpx
 mss
-openai
 Pillow
 pyautogui
 pynput
 pystray
 python-dotenv
 certifi
-truststore
 watchdog

@@ -12,44 +12,33 @@ python -m pip install -r requirements.txt
 
 Copia `.env.example` a `.env` y completa las claves necesarias.
 
-Para usar Gemini como proveedor principal y GPT como respaldo:
+Para usar solo Gemini:
 
 ```env
-AI_PROVIDER=auto
+AI_PROVIDER=gemini
 CAPTURE_WRITE_DELAY_SECONDS=0.15
 IMAGE_MAX_SIZE=1600
 IMAGE_JPEG_QUALITY=82
 GEMINI_API_KEY=tu_clave_gemini
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash
+GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro
 GEMINI_MAX_OUTPUT_TOKENS=16
 GEMINI_THINKING_BUDGET=0
 GOOGLE_SEARCH=false
 GEMINI_TIMEOUT_SECONDS=20
 GEMINI_TRUST_ENV=false
 GEMINI_USE_SYSTEM_CERTS=true
-OPENAI_FALLBACK=true
-OPENAI_API_KEY=tu_clave_openai
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_MAX_OUTPUT_TOKENS=16
-OPENAI_TIMEOUT_SECONDS=30
-OPENAI_WEB_SEARCH=false
-OPENAI_TRUST_ENV=false
-OPENAI_USE_SYSTEM_CERTS=true
 ```
 
-Con `AI_PROVIDER=auto`, la app usa Gemini si existe `GEMINI_API_KEY`; si Gemini no esta disponible y `OPENAI_FALLBACK=true`, reintenta con GPT.
+TARCA no llama a GPT/OpenAI. Si `GEMINI_MODEL` falla, reintenta los modelos gratuitos de `GEMINI_FALLBACK_MODELS` en orden. No se incluye `gemini-3.1-pro-preview` porque requiere facturacion activa.
+
+Mantén `GOOGLE_SEARCH=false` si quieres evitar costes de herramientas externas; la busqueda/grounding tiene limites y tarifas propios.
 
 Para acelerar la respuesta, TARCA redimensiona y comprime la captura antes de enviarla. Sube `IMAGE_MAX_SIZE` a `2000` si alguna pregunta pequena pierde legibilidad.
 
 Los Gems de Gemini se usan desde la app web de Gemini. La API no permite invocar directamente un Gem compartido por enlace, asi que TARCA usa Gemini API con las instrucciones del prompt local.
 
 Si Gemini muestra `CERTIFICATE_VERIFY_FAILED`, TARCA genera un bundle local con certificados de Windows en `.tarca_cache`. Si tu empresa te da un certificado CA concreto, pon su ruta en `GEMINI_CA_BUNDLE`. `GEMINI_TRUST_ENV=false` evita usar proxies rotos definidos en el entorno.
-
-Si ves `Connection error` en OpenAI:
-
-- `OPENAI_TRUST_ENV=false` evita usar proxies rotos definidos en el entorno.
-- `OPENAI_USE_SYSTEM_CERTS=true` usa certificados del sistema con el paquete `truststore`.
-- Si tu empresa te da un certificado CA concreto, pon su ruta en `OPENAI_CA_BUNDLE`.
 
 ## Uso
 
