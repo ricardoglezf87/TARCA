@@ -22,12 +22,19 @@ IMAGE_JPEG_QUALITY=82
 GEMINI_API_KEY=tu_clave_gemini
 GEMINI_MODEL=gemini-3.5-flash
 GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro
+GEMINI_GEM_INSTRUCTIONS_FILE=gem_instructions.md
 GEMINI_MAX_OUTPUT_TOKENS=16
+GEMINI_EXTRACTION_MODEL=gemini-3.1-flash-lite
+GEMINI_EXTRACT_MAX_OUTPUT_TOKENS=700
 GEMINI_THINKING_BUDGET=0
 GOOGLE_SEARCH=false
 GEMINI_TIMEOUT_SECONDS=20
 GEMINI_TRUST_ENV=false
 GEMINI_USE_SYSTEM_CERTS=true
+PROJECT_CONTEXT_ENABLED=true
+PROJECT_CONTEXT_DIR=InformacionPrevia
+PROJECT_CONTEXT_MAX_CHUNKS=5
+PROJECT_CONTEXT_FALLBACK_OLD_METHOD=true
 ```
 
 TARCA no llama a GPT/OpenAI. Si `GEMINI_MODEL` falla, reintenta los modelos gratuitos de `GEMINI_FALLBACK_MODELS` en orden. No se incluye `gemini-3.1-pro-preview` porque requiere facturacion activa.
@@ -36,7 +43,11 @@ Mantén `GOOGLE_SEARCH=false` si quieres evitar costes de herramientas externas;
 
 Para acelerar la respuesta, TARCA redimensiona y comprime la captura antes de enviarla. Sube `IMAGE_MAX_SIZE` a `2000` si alguna pregunta pequena pierde legibilidad.
 
-Los Gems de Gemini se usan desde la app web de Gemini. La API no permite invocar directamente un Gem compartido por enlace, asi que TARCA usa Gemini API con las instrucciones del prompt local.
+Los Gems de Gemini se usan desde la app web de Gemini. TARCA no puede leer ni invocar directamente un Gem privado por enlace. Para reutilizar su informacion, copia las instrucciones/contenido del Gem en `gem_instructions.md`; TARCA lo cargara automaticamente en cada consulta.
+
+Los archivos adjuntos al Gem tampoco llegan por la API. Para cubrir esa parte sin coste de Vector Store, TARCA busca localmente en los PDFs de `InformacionPrevia`, extrae fragmentos relevantes y solo pasa esos fragmentos a Gemini.
+
+Si no encuentra evidencia suficiente en esos PDFs, `PROJECT_CONTEXT_FALLBACK_OLD_METHOD=true` hace una segunda consulta con el metodo antiguo, usando solo la captura.
 
 Si Gemini muestra `CERTIFICATE_VERIFY_FAILED`, TARCA genera un bundle local con certificados de Windows en `.tarca_cache`. Si tu empresa te da un certificado CA concreto, pon su ruta en `GEMINI_CA_BUNDLE`. `GEMINI_TRUST_ENV=false` evita usar proxies rotos definidos en el entorno.
 

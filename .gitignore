@@ -2,3 +2,5 @@ capturas/
 .env
 __pycache__/
 .tarca_cache/
+gem_instructions.md
+InformacionPrevia/

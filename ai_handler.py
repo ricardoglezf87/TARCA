@@ -7,7 +7,8 @@ from watchdog.events import FileSystemEventHandler
 
 from cert_config import configurar_certificados_google, opciones_http_gemini
 from image_utils import imagen_optimizada
-from prompts import PROMPT_PARA_GEMINI, PROMPT_PARA_GOOGLE_SEARCH
+from project_context import buscar_contexto_proyecto
+from prompts import PROMPT_METODO_ANTIGUO, PROMPT_PARA_GOOGLE_SEARCH, construir_prompt_gemini
 from ticker_display import reset_to_default_state, show_processing_state, update_ticker
 
 
@@ -21,6 +22,7 @@ DEFAULT_GEMINI_FALLBACK_MODELS = [
 DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 16
 DEFAULT_GEMINI_THINKING_BUDGET = 0
 DEFAULT_CAPTURE_WRITE_DELAY_SECONDS = 0.15
+DEFAULT_GEMINI_EXTRACT_MAX_OUTPUT_TOKENS = 700
 VALID_PROVIDERS = {"auto", "gemini"}
 
 
@@ -64,20 +66,36 @@ def _cadena_causas_error(exc):
     return " | ".join(causas)
 
 
-def _normalizar_respuesta_letras(texto):
+def _normalizar_respuesta(texto):
     if not texto:
         return ""
 
-    for linea in texto.splitlines():
-        compacta = re.sub(r"[\s,.;:/\\|+_-]+", "", linea.strip().upper())
-        if compacta and re.fullmatch(r"[A-H]+", compacta):
-            return compacta
+    limpio = texto.strip()
+    limpio_lower = limpio.lower()
 
-    coincidencia = re.search(r"\b([A-H](?:[\s,;/+]*[A-H])*)\b", texto.upper())
+    if "captura no legible" in limpio_lower:
+        return "Respuesta: captura no legible"
+    if "no encontrada en archivos" in limpio_lower:
+        return "Respuesta: no encontrada en archivos"
+
+    coincidencia = re.search(r"(?:respuesta\s*:\s*)?([a-h](?:[\s,;/+]*[a-h])*)\s*$", limpio, re.IGNORECASE)
     if coincidencia:
-        return re.sub(r"[^A-H]", "", coincidencia.group(1))
+        letras = sorted({letra.lower() for letra in re.findall(r"[a-h]", coincidencia.group(1), re.IGNORECASE)})
+        if letras:
+            return f"Respuesta: {', '.join(letras)}"
 
-    return texto.strip()
+    return limpio
+
+
+def _texto_para_ticker(texto):
+    coincidencia = re.fullmatch(r"Respuesta:\s*([a-h](?:\s*,\s*[a-h])*)", texto.strip(), re.IGNORECASE)
+    if coincidencia:
+        return "".join(re.findall(r"[a-h]", coincidencia.group(1), re.IGNORECASE)).upper()
+    return "?"
+
+
+def _es_no_encontrada_en_archivos(texto):
+    return "no encontrada en archivos" in (texto or "").lower()
 
 
 class ManejadorCapturas(FileSystemEventHandler):
@@ -87,6 +105,7 @@ class ManejadorCapturas(FileSystemEventHandler):
         self.archivos_procesados = set()
         self.proveedor_ia = self._resolver_proveedor_ia()
         self.cliente_gemini = None
+        self.contextos_por_imagen = {}
         print(f"Proveedor de IA activo: {self.proveedor_ia}")
 
     def _resolver_proveedor_ia(self):
@@ -143,7 +162,7 @@ class ManejadorCapturas(FileSystemEventHandler):
                     duracion = time.perf_counter() - inicio
                     print(f"Tiempo gemini ({modelo}): {duracion:.2f}s")
                     print(f"Respuesta gemini ({modelo}): {texto_respuesta}")
-                    update_ticker(texto_respuesta)
+                    update_ticker(_texto_para_ticker(texto_respuesta))
                     return
 
                 print(f"Gemini ({modelo}) no devolvio contenido util en {time.perf_counter() - inicio:.2f}s.")
@@ -174,7 +193,7 @@ class ManejadorCapturas(FileSystemEventHandler):
             texto_respuesta = google_handler.process_image(
                 ruta_imagen, PROMPT_PARA_GOOGLE_SEARCH, modelo
             )
-            return _normalizar_respuesta_letras(texto_respuesta)
+            return _normalizar_respuesta(texto_respuesta)
 
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
@@ -207,9 +226,31 @@ class ManejadorCapturas(FileSystemEventHandler):
         if thinking_budget >= 0:
             config.thinking_config = types.ThinkingConfig(thinking_budget=thinking_budget)
 
+        contexto_proyecto = self._obtener_contexto_proyecto(ruta_imagen, imagen)
+        if not contexto_proyecto and _env_bool("PROJECT_CONTEXT_FALLBACK_OLD_METHOD", True):
+            print("Sin evidencia local suficiente. Usando metodo antiguo...")
+            return self._procesar_con_prompt(modelo, imagen, config, PROMPT_METODO_ANTIGUO)
+
+        respuesta_documental = self._procesar_con_prompt(
+            modelo,
+            imagen,
+            config,
+            construir_prompt_gemini(contexto_proyecto),
+        )
+        if (
+            _es_no_encontrada_en_archivos(respuesta_documental)
+            and _env_bool("PROJECT_CONTEXT_FALLBACK_OLD_METHOD", True)
+        ):
+            print("No encontrada en la documentacion. Usando metodo antiguo...")
+            respuesta_antigua = self._procesar_con_prompt(modelo, imagen, config, PROMPT_METODO_ANTIGUO)
+            return respuesta_antigua or respuesta_documental
+
+        return respuesta_documental
+
+    def _procesar_con_prompt(self, modelo, imagen, config, prompt):
         respuesta = self.cliente_gemini.models.generate_content(
             model=modelo,
-            contents=[PROMPT_PARA_GEMINI, imagen],
+            contents=[prompt, imagen],
             config=config,
         )
 
@@ -218,4 +259,52 @@ class ManejadorCapturas(FileSystemEventHandler):
             print("Gemini no devolvio contenido.")
             return None
 
-        return _normalizar_respuesta_letras(texto)
+        return _normalizar_respuesta(texto)
+
+    def _obtener_contexto_proyecto(self, ruta_imagen, imagen):
+        if not _env_bool("PROJECT_CONTEXT_ENABLED", True):
+            return ""
+        if ruta_imagen in self.contextos_por_imagen:
+            return self.contextos_por_imagen[ruta_imagen]
+
+        pregunta = self._extraer_texto_pregunta(imagen)
+        contexto = buscar_contexto_proyecto(pregunta)
+        self.contextos_por_imagen[ruta_imagen] = contexto
+        if contexto:
+            print("Contexto local encontrado en archivos del proyecto.")
+        else:
+            print("Sin contexto local relevante en archivos del proyecto.")
+        return contexto
+
+    def _extraer_texto_pregunta(self, imagen):
+        if self.cliente_gemini is None:
+            raise RuntimeError("Cliente Gemini no inicializado.")
+
+        from google.genai import types
+
+        modelo_extraccion = os.getenv("GEMINI_EXTRACTION_MODEL", "gemini-3.1-flash-lite")
+        prompt_extraccion = """Lee la captura y extrae texto para buscar en documentos.
+Devuelve solo:
+- Enunciado de la pregunta.
+- Opciones con sus letras.
+- Numero de respuestas requeridas si aparece."""
+        config = types.GenerateContentConfig(
+            max_output_tokens=_env_int(
+                "GEMINI_EXTRACT_MAX_OUTPUT_TOKENS",
+                DEFAULT_GEMINI_EXTRACT_MAX_OUTPUT_TOKENS,
+            ),
+            temperature=0,
+        )
+        thinking_budget = _env_int("GEMINI_THINKING_BUDGET", DEFAULT_GEMINI_THINKING_BUDGET)
+        if thinking_budget >= 0:
+            config.thinking_config = types.ThinkingConfig(thinking_budget=thinking_budget)
+
+        respuesta = self.cliente_gemini.models.generate_content(
+            model=modelo_extraccion,
+            contents=[prompt_extraccion, imagen],
+            config=config,
+        )
+        texto = getattr(respuesta, "text", "") or ""
+        if texto:
+            print("Texto de la captura extraido para busqueda local.")
+        return texto

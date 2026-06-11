@@ -2,6 +2,7 @@ google-genai
 httpx
 mss
 Pillow
+PyMuPDF
 pyautogui
 pynput
 pystray
